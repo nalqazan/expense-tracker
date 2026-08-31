@@ -121,6 +121,25 @@
     font-size:0.85rem;
   }
 
+  .header-controls{
+    display:flex;
+    flex-direction:column;
+    align-items:flex-end;
+    gap:8px;
+  }
+  .lang-btn{
+    background:none;
+    border:1px solid var(--rule);
+    color: var(--ink);
+    padding: 4px 12px;
+    border-radius:20px;
+    cursor:pointer;
+    font-family:'ThmanyahSans', sans-serif;
+    font-weight:500;
+    font-size:0.75rem;
+    transition: background .15s ease;
+  }
+  .lang-btn:hover{ background: var(--paper-deep); }
   .month-nav{
     display:flex;
     align-items:center;
@@ -441,13 +460,16 @@
 
       <header class="cover">
         <div>
-          <h1>دفتر المصروفات اليومية</h1>
+          <h1 id="pageTitle">دفتر المصروفات اليومية</h1>
           <p id="dateSubtitle">جاري التحميل...</p>
         </div>
-        <div class="month-nav">
-          <button id="prevMonth" aria-label="الدورة السابقة">‹</button>
-          <span class="month-label" id="monthLabel">—</span>
-          <button id="nextMonth" aria-label="الدورة التالية">›</button>
+        <div class="header-controls">
+          <div class="month-nav">
+            <button id="prevMonth" aria-label="الدورة السابقة">‹</button>
+            <span class="month-label" id="monthLabel">—</span>
+            <button id="nextMonth" aria-label="الدورة التالية">›</button>
+          </div>
+          <button id="langToggle" class="lang-btn" type="button">English</button>
         </div>
       </header>
 
@@ -463,8 +485,65 @@
 <script>
 (function(){
   const CATEGORIES = ["طعام وشراب","مواصلات","تسوق","فواتير وخدمات","صحة","ترفيه","تعليم","أخرى"];
-  const ARABIC_MONTHS = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+  const CATEGORIES_EN = ["Food & Drink","Transport","Shopping","Bills & Utilities","Health","Entertainment","Education","Other"];
+  const CAT_LABEL = {}; // filled after STRINGS defined, maps canonical AR category -> label in current lang
+  const ENGLISH_MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const STORAGE_KEY = "expense-tracker-data";
+  const LANG_KEY = "expense-tracker-lang";
+
+  const STRINGS = {
+    ar: {
+      dir: 'rtl', htmlLang: 'ar',
+      title: 'دفتر المصروفات اليومية',
+      subtitle: 'سجلك الشخصي للمصروفات اليومية',
+      prevCycle: 'الدورة السابقة', nextCycle: 'الدورة التالية',
+      paydayLabel: 'تاريخ نزول الراتب (بداية الدورة الحالية)',
+      cycleTotal: 'إجمالي هذه الدورة', entriesCount: 'عدد القيود', cycleBudget: 'ميزانية الدورة',
+      remaining: 'المتبقي', overSuffix: ' (تجاوز)',
+      addEntryTitle: 'إضافة قيد جديد',
+      amountLabel: 'المبلغ (ر.س)', categoryLabel: 'الفئة', descLabel: 'الوصف (اختياري)',
+      descPlaceholder: 'مثال: غداء مع الفريق', dateLabel: 'التاريخ',
+      submitBtn: 'تسجيل القيد', formError: 'الرجاء إدخال مبلغ صحيح واختيار الفئة',
+      catDistTitle: 'توزيع الفئات هذه الدورة', entriesTitle: 'القيود',
+      emptyState: 'الدفتر لا يزال فارغًا في هذه الدورة. سجّل أول قيد أعلاه.',
+      thDate: 'التاريخ', thCategory: 'الفئة', thDesc: 'الوصف', thAmount: 'المبلغ',
+      delAria: 'حذف القيد', delTitle: 'حذف',
+      toastAdded: 'تم تسجيل القيد', toastDeleted: 'تم حذف القيد',
+      toastPayday: 'تم تحديث دورة الراتب', toastSaveError: 'تعذر الحفظ، حاول مرة أخرى',
+      currency: 'ر.س', langToggle: 'English'
+    },
+    en: {
+      dir: 'ltr', htmlLang: 'en',
+      title: 'Daily Expense Ledger',
+      subtitle: 'Your personal daily expense record',
+      prevCycle: 'Previous cycle', nextCycle: 'Next cycle',
+      paydayLabel: 'Payday date (start of current cycle)',
+      cycleTotal: 'Total this cycle', entriesCount: 'Entries', cycleBudget: 'Cycle budget',
+      remaining: 'Remaining', overSuffix: ' (over)',
+      addEntryTitle: 'Add new entry',
+      amountLabel: 'Amount (SAR)', categoryLabel: 'Category', descLabel: 'Description (optional)',
+      descPlaceholder: 'e.g. Lunch with the team', dateLabel: 'Date',
+      submitBtn: 'Add entry', formError: 'Please enter a valid amount and choose a category',
+      catDistTitle: 'Category breakdown this cycle', entriesTitle: 'Entries',
+      emptyState: 'This cycle is still empty. Add your first entry above.',
+      thDate: 'Date', thCategory: 'Category', thDesc: 'Description', thAmount: 'Amount',
+      delAria: 'Delete entry', delTitle: 'Delete',
+      toastAdded: 'Entry added', toastDeleted: 'Entry deleted',
+      toastPayday: 'Pay cycle updated', toastSaveError: 'Could not save, try again',
+      currency: 'SAR', langToggle: 'العربية'
+    }
+  };
+
+  let lang = 'ar';
+  function T(){ return STRINGS[lang]; }
+  function catLabel(cat){
+    if(lang === 'ar') return cat;
+    const idx = CATEGORIES.indexOf(cat);
+    return idx >= 0 ? CATEGORIES_EN[idx] : cat;
+  }
+  function currentCategoryList(){
+    return lang === 'ar' ? CATEGORIES : CATEGORIES_EN;
+  }
 
   function toISO(d){
     const off = d.getTimezoneOffset();
@@ -520,12 +599,12 @@
   }
 
   function fmtMoney(n){
-    return n.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' ر.س';
+    return n.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' ' + T().currency;
   }
 
   function fmtDateShort(iso){
     const d = new Date(iso + 'T00:00:00');
-    return d.getDate() + ' ' + ARABIC_MONTHS[d.getMonth()].slice(0,3);
+    return d.getDate() + ' ' + ENGLISH_MONTHS_SHORT[d.getMonth()];
   }
 
   async function loadData(){
@@ -542,14 +621,24 @@
       state = { entries: [], budget: 0, payday: defaultPayday() };
     }
     cycleStart = cycleStartContaining(new Date(state.payday + 'T00:00:00'), new Date());
+    try{
+      const savedLang = localStorage.getItem(LANG_KEY);
+      if(savedLang === 'ar' || savedLang === 'en') lang = savedLang;
+    }catch(e){}
+    applyDirection();
     render();
+  }
+
+  function applyDirection(){
+    document.documentElement.setAttribute('dir', T().dir);
+    document.documentElement.setAttribute('lang', T().htmlLang);
   }
 
   async function saveData(){
     try{
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     }catch(e){
-      showToast('تعذر الحفظ، حاول مرة أخرى');
+      showToast(T().toastSaveError);
     }
   }
 
@@ -586,8 +675,14 @@
   }
 
   function render(){
+    const t = T();
+    document.getElementById('pageTitle').textContent = t.title;
+    document.title = t.title;
+    document.getElementById('prevMonth').setAttribute('aria-label', t.prevCycle);
+    document.getElementById('nextMonth').setAttribute('aria-label', t.nextCycle);
+    document.getElementById('langToggle').textContent = t.langToggle;
     monthLabel.textContent = cycleLabel(cycleStart);
-    dateSubtitle.textContent = 'سجلك الشخصي للمصروفات اليومية';
+    dateSubtitle.textContent = t.subtitle;
 
     const monthEntries = entriesForCycle(cycleStart);
     const monthTotal = monthEntries.reduce((s,e)=> s + e.amount, 0);
@@ -607,46 +702,46 @@
 
     // pay-cycle setting
     html += '<div class="summary" style="margin-bottom:8px;">';
-    html += '<div class="stat"><div class="label">تاريخ نزول الراتب (بداية الدورة الحالية)</div><div class="budget-edit"><input type="date" id="paydayInput" value="'+state.payday+'"></div></div>';
+    html += '<div class="stat"><div class="label">'+t.paydayLabel+'</div><div class="budget-edit"><input type="date" id="paydayInput" value="'+state.payday+'"></div></div>';
     html += '</div>';
 
     // summary
     html += '<div class="summary">';
-    html += '<div class="stat"><div class="label">إجمالي هذه الدورة</div><div class="value spent">'+fmtMoney(monthTotal)+'</div></div>';
-    html += '<div class="stat"><div class="label">عدد القيود</div><div class="value">'+monthEntries.length+'</div></div>';
-    html += '<div class="stat"><div class="label">ميزانية الدورة</div><div class="budget-edit"><input type="number" min="0" step="1" id="budgetInput" value="'+(budget || '')+'" placeholder="0"><span style="font-size:0.78rem;color:var(--ink-soft)">ر.س</span></div></div>';
+    html += '<div class="stat"><div class="label">'+t.cycleTotal+'</div><div class="value spent">'+fmtMoney(monthTotal)+'</div></div>';
+    html += '<div class="stat"><div class="label">'+t.entriesCount+'</div><div class="value">'+monthEntries.length+'</div></div>';
+    html += '<div class="stat"><div class="label">'+t.cycleBudget+'</div><div class="budget-edit"><input type="number" min="0" step="1" id="budgetInput" value="'+(budget || '')+'" placeholder="0"><span style="font-size:0.78rem;color:var(--ink-soft)">'+t.currency+'</span></div></div>';
     if(budget > 0){
       const overBudget = remaining < 0;
       const overMark = overBudget ? ' ⚠' : '';
-      html += '<div class="stat"><div class="label">المتبقي</div><div class="value '+(overBudget?'over':'ok')+'">'+fmtMoney(Math.abs(remaining))+(overBudget?' (تجاوز)':'')+overMark+'</div></div>';
+      html += '<div class="stat"><div class="label">'+t.remaining+'</div><div class="value '+(overBudget?'over':'ok')+'">'+fmtMoney(Math.abs(remaining))+(overBudget?t.overSuffix:'')+overMark+'</div></div>';
     }
     html += '</div>';
 
     // form
     html += '<section>';
-    html += '<h2 class="section-title">إضافة قيد جديد</h2>';
+    html += '<h2 class="section-title">'+t.addEntryTitle+'</h2>';
     html += '<form class="entry-form" id="entryForm">';
-    html += '<div class="field"><label for="amountInput">المبلغ (ر.س)</label><input type="number" id="amountInput" min="0.01" step="0.01" placeholder="0.00" required></div>';
-    html += '<div class="field"><label for="categoryInput">الفئة</label><select id="categoryInput" required>' + CATEGORIES.map(c=>'<option value="'+c+'">'+c+'</option>').join('') + '</select></div>';
-    html += '<div class="field full"><label for="descInput">الوصف (اختياري)</label><input type="text" id="descInput" placeholder="مثال: غداء مع الفريق"></div>';
-    html += '<div class="field"><label for="dateInput">التاريخ</label><input type="date" id="dateInput" value="'+todayISO()+'" required></div>';
-    html += '<div class="error-msg" id="formError">الرجاء إدخال مبلغ صحيح واختيار الفئة</div>';
-    html += '<div class="submit-row"><button type="submit" class="add-btn">تسجيل القيد</button></div>';
+    html += '<div class="field"><label for="amountInput">'+t.amountLabel+'</label><input type="number" id="amountInput" min="0.01" step="0.01" placeholder="0.00" required></div>';
+    html += '<div class="field"><label for="categoryInput">'+t.categoryLabel+'</label><select id="categoryInput" required>' + CATEGORIES.map(c=>'<option value="'+c+'">'+catLabel(c)+'</option>').join('') + '</select></div>';
+    html += '<div class="field full"><label for="descInput">'+t.descLabel+'</label><input type="text" id="descInput" placeholder="'+t.descPlaceholder+'"></div>';
+    html += '<div class="field"><label for="dateInput">'+t.dateLabel+'</label><input type="date" id="dateInput" value="'+todayISO()+'" required></div>';
+    html += '<div class="error-msg" id="formError">'+t.formError+'</div>';
+    html += '<div class="submit-row"><button type="submit" class="add-btn">'+t.submitBtn+'</button></div>';
     html += '</form>';
     html += '</section>';
 
     // tally
     if(monthEntries.length > 0){
       html += '<section>';
-      html += '<h2 class="section-title">توزيع الفئات هذه الدورة</h2>';
+      html += '<h2 class="section-title">'+t.catDistTitle+'</h2>';
       html += '<div class="tally-list">';
       CATEGORIES.filter(c => catTotals[c].count > 0).sort((a,b)=> catTotals[b].amount - catTotals[a].amount).forEach(c=>{
-        const t = catTotals[c];
-        const pct = Math.round((t.amount / maxCatAmount) * 100);
+        const tt = catTotals[c];
+        const pct = Math.round((tt.amount / maxCatAmount) * 100);
         html += '<div class="tally-row">';
-        html += '<span class="cat-name">'+c+'</span>';
-        html += '<span class="tally-marks">'+tallyHTML(t.count)+'</span>';
-        html += '<span class="amount-bar-wrap"><span class="amount-bar" style="width:'+pct+'%"></span><span class="amount-value">'+fmtMoney(t.amount)+'</span></span>';
+        html += '<span class="cat-name">'+catLabel(c)+'</span>';
+        html += '<span class="tally-marks">'+tallyHTML(tt.count)+'</span>';
+        html += '<span class="amount-bar-wrap"><span class="amount-bar" style="width:'+pct+'%"></span><span class="amount-value">'+fmtMoney(tt.amount)+'</span></span>';
         html += '</div>';
       });
       html += '</div>';
@@ -655,19 +750,19 @@
 
     // ledger
     html += '<section>';
-    html += '<h2 class="section-title">القيود</h2>';
+    html += '<h2 class="section-title">'+t.entriesTitle+'</h2>';
     if(monthEntries.length === 0){
-      html += '<div class="empty-state">الدفتر لا يزال فارغًا في هذه الدورة. سجّل أول قيد أعلاه.</div>';
+      html += '<div class="empty-state">'+t.emptyState+'</div>';
     }else{
       html += '<div class="ledger">';
-      html += '<div class="ledger-row head"><span>التاريخ</span><span>الفئة</span><span class="desc">الوصف</span><span>المبلغ</span><span></span></div>';
+      html += '<div class="ledger-row head"><span>'+t.thDate+'</span><span>'+t.thCategory+'</span><span class="desc">'+t.thDesc+'</span><span>'+t.thAmount+'</span><span></span></div>';
       monthEntries.forEach(e=>{
         html += '<div class="ledger-row">';
         html += '<span class="date">'+fmtDateShort(e.date)+'</span>';
-        html += '<span class="cat-tag">'+e.category+'</span>';
+        html += '<span class="cat-tag">'+catLabel(e.category)+'</span>';
         html += '<span class="desc">'+(e.description || '—')+'</span>';
         html += '<span class="amt">'+e.amount.toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2})+'</span>';
-        html += '<button class="del-btn" data-id="'+e.id+'" aria-label="حذف القيد" title="حذف">✕</button>';
+        html += '<button class="del-btn" data-id="'+e.id+'" aria-label="'+t.delAria+'" title="'+t.delTitle+'">✕</button>';
         html += '</div>';
       });
       html += '</div>';
@@ -702,7 +797,7 @@
       await saveData();
       cycleStart = cycleStartContaining(new Date(state.payday + 'T00:00:00'), new Date(date + 'T00:00:00'));
       render();
-      showToast('تم تسجيل القيد');
+      showToast(T().toastAdded);
     });
 
     document.getElementById('budgetInput').addEventListener('change', async function(ev){
@@ -718,7 +813,7 @@
       await saveData();
       cycleStart = cycleStartContaining(new Date(state.payday + 'T00:00:00'), new Date());
       render();
-      showToast('تم تحديث دورة الراتب');
+      showToast(T().toastPayday);
     });
 
     document.querySelectorAll('.del-btn').forEach(btn=>{
@@ -727,7 +822,7 @@
         state.entries = state.entries.filter(e => e.id !== id);
         await saveData();
         render();
-        showToast('تم حذف القيد');
+        showToast(T().toastDeleted);
       });
     });
   }
@@ -738,6 +833,13 @@
   });
   document.getElementById('nextMonth').addEventListener('click', ()=>{
     cycleStart = addMonths(cycleStart, 1);
+    render();
+  });
+
+  document.getElementById('langToggle').addEventListener('click', ()=>{
+    lang = (lang === 'ar') ? 'en' : 'ar';
+    try{ localStorage.setItem(LANG_KEY, lang); }catch(e){}
+    applyDirection();
     render();
   });
 
